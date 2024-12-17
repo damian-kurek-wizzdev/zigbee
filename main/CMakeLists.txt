@@ -12,6 +12,9 @@ set (ALL_SOURCES
     ${SRC_DIR}/common/utils.h
     ${SRC_DIR}/common/error_codes.c
     ${SRC_DIR}/common/error_codes.h
+    ${SRC_DIR}/zigbee_example.cpp
+    ${SRC_DIR}/zigbee_example.h
+
     )
 
 
@@ -25,10 +28,8 @@ set(COMPONENT_REQUIRES
     nvs_flash
     log
     freertos
-    driver
-    lwip
-    bt
-    esp_eth
+    esp-zboss-lib
+    esp-zigbee-lib
     )
 
 set(COMPONENT_PRIV_REQUIRES)

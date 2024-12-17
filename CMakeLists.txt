@@ -14,4 +14,4 @@ include(${IDF_CMAKE})
 
 # option(BUILD_WITH_PRINTS_AND_LOGS "Enable printing log messages" OFF)
 
-project(pockethernet_esp32)
+project(zigbee)

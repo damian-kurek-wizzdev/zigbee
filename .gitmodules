@@ -6,3 +6,6 @@
 	path = externals/googletest
 	url = https://github.com/google/googletest.git
 	branch = v1.10.x
+[submodule "externals/zigbee"]
+	path = externals/zigbee
+	url = https://github.com/espressif/esp-zigbee-sdk.git
