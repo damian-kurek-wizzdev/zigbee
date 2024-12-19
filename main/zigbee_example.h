@@ -23,6 +23,7 @@ struct tskTaskControlBlock;
 typedef struct tskTaskControlBlock* TaskHandle_t;
 #endif // !TESTING
 
+
 #include "esp_zigbee_core.h"
 
 enum class ESystemMode : int8_t
@@ -31,17 +32,23 @@ enum class ESystemMode : int8_t
     OFF     = 0
 };
 
+extern "C" esp_err_t initEspZigbeeExternC(esp_zb_platform_config_t* config);
+
 
 class MillZigbee
 {
 public:
-    MillZigbee();
+    MillZigbee() = default;
 
     static MillZigbee* getInstance();
 
     static esp_err_t zigbeeActionHandlerStatic(esp_zb_core_action_callback_id_t callbackId, const void* message);
     esp_err_t        zigbeeActionHandler(esp_zb_core_action_callback_id_t callbackId, const void* message);
 
+    void zigbeeSignalsLoop(esp_zb_app_signal_t* signal);
+
+    bool isConfigured() const;
+    bool startCommisioning();
 
 #if !TESTING
     static void perform(void* params);
@@ -56,12 +63,22 @@ private:
     TaskHandle_t m_taskHandle = nullptr;
 #endif // !TESTING
 
-    int16_t     m_localTemperature;
-    int16_t     m_setTemperature;
-    ESystemMode m_systemMode;
-
+    int16_t     m_localTemperature = 0;
+    int16_t     m_setTemperature   = 0;
+    ESystemMode m_systemMode       = ESystemMode::OFF;
+    bool        m_started          = false;
+    esp_err_t   attributeReportingHandler(const esp_zb_zcl_report_attr_message_t* message);
 
     esp_err_t setAttrbibuteCallback(const esp_zb_zcl_set_attr_value_message_t* pMessage);
+    esp_err_t appAttributeHandler(uint16_t cluster_id, const esp_zb_zcl_attribute_t* attribute);
+
+    esp_err_t readAttributeResponeHandler(const esp_zb_zcl_cmd_read_attr_resp_message_t* message);
+    esp_err_t configureReportResponseHandler(const esp_zb_zcl_cmd_config_report_resp_message_t* message);
+    esp_err_t thermostatClusterMessageHandler(const esp_zb_zcl_thermostat_value_message_t* message);
+    esp_err_t thermostatWeeklyProgramSetCluster(const esp_zb_zcl_thermostat_weekly_schedule_set_message_t* message);
+
+    esp_zb_ep_list_t*      createThermostatEndpoint(uint8_t endpoint_id, esp_zb_thermostat_cfg_t* thermostat);
+    esp_zb_cluster_list_t* createThermostatCluster(esp_zb_thermostat_cfg_t* thermostat);
 };
 
 void esp_zb_task(void* pvParameters);
