@@ -32,8 +32,6 @@ enum class ESystemMode : int8_t
     OFF     = 0
 };
 
-extern "C" esp_err_t initEspZigbeeExternC(esp_zb_platform_config_t* config);
-
 
 class MillZigbee
 {
@@ -57,6 +55,9 @@ public:
     void        startZigbee();
 #endif // !TESTING
 
+    void setLocalTemperature(float localTemperature);
+    void setSetTemperature(float setTemperature);
+    void setSystemMode(ESystemMode systemMode);
 
 private:
 #if !TESTING
@@ -64,7 +65,7 @@ private:
 #endif // !TESTING
 
     int16_t     m_localTemperature = 0;
-    int16_t     m_setTemperature   = 0;
+    uint16_t    m_setTemperature   = 0;
     ESystemMode m_systemMode       = ESystemMode::OFF;
     bool        m_started          = false;
     esp_err_t   attributeReportingHandler(const esp_zb_zcl_report_attr_message_t* message);
@@ -79,6 +80,9 @@ private:
 
     esp_zb_ep_list_t*      createThermostatEndpoint(uint8_t endpoint_id, esp_zb_thermostat_cfg_t* thermostat);
     esp_zb_cluster_list_t* createThermostatCluster(esp_zb_thermostat_cfg_t* thermostat);
+
+    void setSuquenceOfOperation();
+    void handleNewSystemMode(uint8_t systemMode);
 };
 
 void esp_zb_task(void* pvParameters);

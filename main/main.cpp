@@ -28,9 +28,20 @@ void run(void)
     instance->startZigbee();
     SLEEP_MS(3000);
     instance->startCommisioning();
+    float temperature = 20;
     while (1)
     {
         LOG_DEBUG("Hello loop");
-        SLEEP_MS(1000);
+        SLEEP_MS(2000);
+
+        // instance->setSystemMode(ESystemMode::HEATING);
+        // SLEEP_MS(2000);
+        // instance->setSystemMode(ESystemMode::OFF);
+
+        // temperature++;
+        // if (temperature > 30)
+        //     temperature = -10;
+        // instance->setLocalTemperature(temperature);
+        // instance->setSetTemperature(temperature);
     }
 }

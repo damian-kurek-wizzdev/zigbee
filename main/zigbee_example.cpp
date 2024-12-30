@@ -12,9 +12,11 @@
  * CONDITIONS OF ANY KIND, either express or implied.
  */
 
+#include "esp_zigbee_attribute.h"
 #include "esp_zigbee_core.h"
 #include "zcl/esp_zigbee_zcl_basic.h"
 #include "zdo/esp_zigbee_zdo_common.h"
+#include <cstdint>
 static const char* LOG_TAG = "Zigbee_mill";
 #define LOG_AL_LEVEL ESP_LOG_INFO
 
@@ -38,19 +40,16 @@ static const char* LOG_TAG = "Zigbee_mill";
 #include "freertos/task.h"
 
 /* Zigbee configuration */
-#define INSTALLCODE_POLICY_ENABLE     false /* enable the install code policy for security */
-#define ED_AGING_TIMEOUT              ESP_ZB_ED_AGING_TIMEOUT_64MIN
-#define ED_KEEP_ALIVE                 3000       /* 3000 millisecond */
-#define HA_ONOFF_SWITCH_ENDPOINT      1          /* esp switch device endpoint */
-#define ESP_ZB_PRIMARY_CHANNEL_MASK   (1l << 11) /* Zigbee primary channel mask use in the example */
-#define ESP_ZB_SECONDARY_CHANNEL_MASK (1l << 13) /* Zigbee primary channel mask use in the example */
-#define HA_THERMOSTAT_ENDPOINT        1          /* esp thermostat device endpoint */
+bool     INSTALLCODE_POLICY_ENABLE = false; /* enable the install code policy for security */
+uint8_t  ED_AGING_TIMEOUT          = ESP_ZB_ED_AGING_TIMEOUT_64MIN;
+uint32_t ED_KEEP_ALIVE             = 3000; /* 3000 millisecond */
+uint8_t  HA_THERMOSTAT_ENDPOINT    = 1;    /* esp thermostat device endpoint */
 
 /* Basic manufacturer information */
-constexpr const char* ESP_MANUFACTURER_NAME = "\x04"
-                                              "Mill"; /* Customized manufacturer name */
-constexpr const char* ESP_MODEL_IDENTIFIER = "\x10"
-                                             "Panel gen4"; /* Customized model identifier */
+constexpr const char* MANUFACTURER_NAME = "\x04"
+                                          "Mill"; /* Customized manufacturer name */
+constexpr const char* MODEL_IDENTIFIER = "\x10"
+                                         "Panel gen4"; /* Customized model identifier */
 
 constexpr const char*    TAG                           = "ESP_HA_ON_OFF_SWITCH";
 constexpr const uint8_t  OPERATION_MODE_HEATING_ONLY   = 2;
@@ -61,6 +60,11 @@ constexpr const uint16_t ZIGBEE_TEMPERATURE_MULTIPLIER = 100; // We need to mult
 constexpr const uint32_t ZIGBEE_USE_ALL_CHANNELS       = 0x07FFF800;
 int                      DEVICE_CLASS                  = 0x02;
 int                      DEVICE_TYPE                   = 0x10;
+constexpr const uint16_t LOCAL_TEMPERATURE_ID          = 0x0;
+constexpr const float    HEATING_MAX                   = 35.0f;
+constexpr const float    HEATING_MIN                   = 5.0f;
+constexpr const uint8_t  SET_SETPOINT_HEAT_ONLY        = 0;
+constexpr const uint8_t  SET_SETPOINT_BOTH             = 2;
 
 typedef struct zbstring_s
 {
@@ -92,12 +96,6 @@ MillZigbee* MillZigbee::getInstance()
         pInstance = new MillZigbee();
     }
     return pInstance;
-}
-
-
-esp_err_t initEspZigbeeExternC(esp_zb_platform_config_t* config)
-{
-    return esp_zb_platform_config(config);
 }
 
 
@@ -182,42 +180,6 @@ void MillZigbee::zigbeeSignalsLoop(esp_zb_app_signal_t* pZigbeeSignal)
         {
             LOG_ERROR("Network formed we can start commisioning");
             esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
-
-            // if (err_status == ESP_OK)
-            // {
-            //     LOG_ERROR("Network formed we can start commisioning");
-
-            //     esp_zb_ieee_addr_t extended_pan_id;
-            //     esp_zb_get_extended_pan_id(extended_pan_id);
-
-            //     ESP_LOGI(
-            //         TAG,
-            //         "Formed network successfully (Extended PAN ID: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x, PAN ID: "
-            //         "0x%04hx, Channel:%d, Short Address: 0x%04hx)",
-            //         extended_pan_id[7],
-            //         extended_pan_id[6],
-            //         extended_pan_id[5],
-            //         extended_pan_id[4],
-            //         extended_pan_id[3],
-            //         extended_pan_id[2],
-            //         extended_pan_id[1],
-            //         extended_pan_id[0],
-            //         esp_zb_get_pan_id(),
-            //         esp_zb_get_current_channel(),
-            //         esp_zb_get_short_address());
-            //     esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
-
-            //     // bdb_start_top_level_commissioning_cb()
-            // }
-            // else
-            // {
-            //     LOG_ERROR("sTART TOP LEVEL COMMISIONING");
-            //     ESP_LOGI(TAG, "Restart network formation (status: %s)", esp_err_to_name(err_status));
-            //     esp_zb_scheduler_alarm(
-            //         (esp_zb_callback_t)bdb_start_top_level_commissioning_cb, ESP_ZB_BDB_MODE_NETWORK_FORMATION,
-            //         1000);
-            // }
-            // break;
         }
         case ESP_ZB_BDB_SIGNAL_STEERING:
             if (err_status == ESP_OK)
@@ -323,11 +285,10 @@ void MillZigbee::performZigbee()
     /* Register the device */
     auto result = esp_zb_device_register(pThermostatEndpoint);
     LOG_ERROR("Register %d", result);
-
     esp_zb_core_action_handler_register(zigbeeActionHandlerStatic);
     result = esp_zb_set_primary_network_channel_set(ZIGBEE_USE_ALL_CHANNELS);
     LOG_ERROR("Channel %d", result);
-    ESP_ERROR_CHECK(esp_zb_start(false));
+    esp_zb_start(false);
     esp_zb_secur_network_min_join_lqi_set(1);
     while (true)
     {
@@ -341,6 +302,44 @@ void MillZigbee::startZigbee()
     auto result = xTaskCreate(MillZigbee::perform, "Zigbee_main", 4096, this, 5, &m_taskHandle);
     if (result != pdPASS)
         LOG_ERROR("Failed to create a task: %s", "Zigbee_main");
+}
+
+void MillZigbee::setLocalTemperature(float localTemperature)
+{
+    int16_t temperatureZigbee = localTemperature * ZIGBEE_TEMPERATURE_MULTIPLIER;
+    auto    status            = esp_zb_zcl_set_attribute_val(
+        HA_THERMOSTAT_ENDPOINT,
+        0X201,
+        ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
+        ESP_ZB_ZCL_ATTR_THERMOSTAT_LOCAL_TEMPERATURE_ID,
+        &temperatureZigbee,
+        false);
+    LOG_ERROR("sTATUS = %d", status);
+}
+
+void MillZigbee::setSetTemperature(float setTemperature)
+{
+    int16_t temperatureZigbee = setTemperature * ZIGBEE_TEMPERATURE_MULTIPLIER;
+    auto    status            = esp_zb_zcl_set_attribute_val(
+        HA_THERMOSTAT_ENDPOINT,
+        0X201,
+        ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
+        ESP_ZB_ZCL_ATTR_THERMOSTAT_OCCUPIED_HEATING_SETPOINT_ID,
+        &temperatureZigbee,
+        false);
+    LOG_ERROR("sTATUS  set temperature = %d %d", status, temperatureZigbee);
+}
+
+void MillZigbee::setSystemMode(ESystemMode systemMode)
+{
+    auto status = esp_zb_zcl_set_attribute_val(
+        HA_THERMOSTAT_ENDPOINT,
+        0X201,
+        ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
+        ESP_ZB_ZCL_ATTR_THERMOSTAT_SYSTEM_MODE_ID,
+        &systemMode,
+        false);
+    LOG_ERROR("sTATUS  set system mode %d", status);
 }
 
 void MillZigbee::init(float localTemperature, float setTemperature, ESystemMode systemMode)
@@ -387,10 +386,23 @@ esp_err_t MillZigbee::attributeReportingHandler(const esp_zb_zcl_report_attr_mes
 esp_err_t MillZigbee::setAttrbibuteCallback(const esp_zb_zcl_set_attr_value_message_t* pMessage)
 {
     LOG_ERROR("Attribute received callback %u", pMessage->attribute.id);
-    if (pMessage->attribute.id == ESP_ZB_ZCL_ATTR_THERMOSTAT_SYSTEM_MODE_ID)
+
+
+    switch (pMessage->attribute.id)
     {
-        LOG_ERROR("System mode");
-        return ESP_FAIL;
+        case ESP_ZB_ZCL_ATTR_THERMOSTAT_SYSTEM_MODE_ID:
+        {
+            uint8_t systemMode = *static_cast<uint8_t*>(pMessage->attribute.data.value);
+            LOG_ERROR("System mode");
+            handleNewSystemMode(systemMode);
+            break;
+        }
+        case ESP_ZB_ZCL_ATTR_THERMOSTAT_CONTROL_SEQUENCE_OF_OPERATION_ID:
+        {
+            LOG_ERROR("Handle sequence of operation");
+            setSuquenceOfOperation();
+            break;
+        }
     }
     return ESP_OK;
 }
@@ -424,6 +436,7 @@ esp_err_t MillZigbee::appAttributeHandler(uint16_t cluster_id, const esp_zb_zcl_
             free(string);
         }
     }
+
     return ESP_OK;
 }
 
@@ -442,8 +455,15 @@ esp_err_t MillZigbee::configureReportResponseHandler(const esp_zb_zcl_cmd_config
 esp_err_t MillZigbee::thermostatClusterMessageHandler(const esp_zb_zcl_thermostat_value_message_t* message)
 {
     LOG_ERROR("Message received %d %d", message->heat_setpoint, message->mode);
-
-    return ESP_OK;
+    if (message->mode != SET_SETPOINT_HEAT_ONLY || message->mode == SET_SETPOINT_BOTH)
+    {
+        LOG_ERROR("Received valid temperature for independent device");
+        m_setTemperature     = message->heat_setpoint;
+        float setTemperature = m_setTemperature / ZIGBEE_TEMPERATURE_MULTIPLIER;
+        // TODO CALLBACK
+        return ESP_OK;
+    }
+    return ESP_FAIL;
 }
 
 esp_err_t
@@ -478,17 +498,80 @@ esp_zb_cluster_list_t* MillZigbee::createThermostatCluster(esp_zb_thermostat_cfg
     esp_zb_cluster_list_t*   pClusterList  = esp_zb_zcl_cluster_list_create();
     esp_zb_attribute_list_t* pBasicCluster = esp_zb_basic_cluster_create(&(thermostat->basic_cfg));
     esp_zb_basic_cluster_add_attr(
-        pBasicCluster, ESP_ZB_ZCL_ATTR_BASIC_MANUFACTURER_NAME_ID, const_cast<char*>(ESP_MANUFACTURER_NAME));
+        pBasicCluster, ESP_ZB_ZCL_ATTR_BASIC_MANUFACTURER_NAME_ID, const_cast<char*>(MANUFACTURER_NAME));
     esp_zb_basic_cluster_add_attr(
-        pBasicCluster, ESP_ZB_ZCL_ATTR_BASIC_MODEL_IDENTIFIER_ID, const_cast<char*>(ESP_MODEL_IDENTIFIER));
+        pBasicCluster, ESP_ZB_ZCL_ATTR_BASIC_MODEL_IDENTIFIER_ID, const_cast<char*>(MODEL_IDENTIFIER));
 
     esp_zb_cluster_list_add_basic_cluster(pClusterList, pBasicCluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
     esp_zb_cluster_list_add_identify_cluster(
         pClusterList, esp_zb_identify_cluster_create(&(thermostat->identify_cfg)), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
     esp_zb_cluster_list_add_identify_cluster(
         pClusterList, esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_IDENTIFY), ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
-    esp_zb_cluster_list_add_thermostat_cluster(
-        pClusterList, esp_zb_thermostat_cluster_create(&(thermostat->thermostat_cfg)), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+    auto* pThermostatCluster = esp_zb_thermostat_cluster_create(&(thermostat->thermostat_cfg));
+    esp_zb_cluster_list_add_thermostat_cluster(pClusterList, pThermostatCluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+    int16_t heatingMinTemperature = HEATING_MIN * ZIGBEE_TEMPERATURE_MULTIPLIER;
+    int16_t heatingMaxTemperature = HEATING_MAX * ZIGBEE_TEMPERATURE_MULTIPLIER;
 
+    esp_zb_cluster_add_attr(
+        pThermostatCluster,
+        0x201,
+        ESP_ZB_ZCL_ATTR_THERMOSTAT_ABS_MAX_HEAT_SETPOINT_LIMIT_ID,
+        ESP_ZB_ZCL_ATTR_TYPE_S16,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+        &heatingMaxTemperature);
+
+    esp_zb_cluster_add_attr(
+        pThermostatCluster,
+        0x201,
+        ESP_ZB_ZCL_ATTR_THERMOSTAT_MAX_HEAT_SETPOINT_LIMIT_ID,
+        ESP_ZB_ZCL_ATTR_TYPE_S16,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+        &heatingMaxTemperature);
+
+    esp_zb_cluster_add_attr(
+        pThermostatCluster,
+        0x201,
+        ESP_ZB_ZCL_ATTR_THERMOSTAT_ABS_MIN_HEAT_SETPOINT_LIMIT_ID,
+        ESP_ZB_ZCL_ATTR_TYPE_S16,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+        &heatingMinTemperature);
+
+    esp_zb_cluster_add_attr(
+        pThermostatCluster,
+        0x201,
+        ESP_ZB_ZCL_ATTR_THERMOSTAT_MIN_HEAT_SETPOINT_LIMIT_ID,
+        ESP_ZB_ZCL_ATTR_TYPE_S16,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+        &heatingMinTemperature);
     return pClusterList;
+}
+
+/**
+ * @brief MillZigbee::setSuquenceOfOperation set private
+ */
+void MillZigbee::setSuquenceOfOperation()
+{
+    auto sequenceOfOperation = esp_zb_zcl_thermostat_control_sequence_of_operation_t::
+        ESP_ZB_ZCL_THERMOSTAT_CONTROL_SEQ_OF_OPERATION_HEATING_ONLY;
+    auto status = esp_zb_zcl_set_attribute_val(
+        HA_THERMOSTAT_ENDPOINT,
+        0X201,
+        ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
+        ESP_ZB_ZCL_ATTR_THERMOSTAT_CONTROL_SEQUENCE_OF_OPERATION_ID,
+        &sequenceOfOperation,
+        false);
+    LOG_ERROR("sTATUS  set sequence of operation %d", status);
+}
+
+void MillZigbee::handleNewSystemMode(uint8_t systemMode)
+{
+    if (systemMode != SYSTEM_MODE_HEATING && systemMode != SYSTEM_MODE_HEATING)
+    {
+        setSystemMode(m_systemMode);
+        return;
+    }
+
+    m_systemMode = static_cast<ESystemMode>(systemMode);
+    // TODO callback here
+    return;
 }
