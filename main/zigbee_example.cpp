@@ -63,29 +63,16 @@ int                      DEVICE_TYPE                   = 0x10;
 constexpr const uint16_t LOCAL_TEMPERATURE_ID          = 0x0;
 constexpr const float    HEATING_MAX                   = 35.0f;
 constexpr const float    HEATING_MIN                   = 5.0f;
+constexpr const uint16_t OCUPIED_COOLING_SETPOINT      = 3600;
 constexpr const uint8_t  SET_SETPOINT_HEAT_ONLY        = 0;
 constexpr const uint8_t  SET_SETPOINT_BOTH             = 2;
+constexpr const uint8_t  POWER_SOURCE_CONFIGURATION    = 1;
 
-typedef struct zbstring_s
-{
-    uint8_t len;
-    char    data[];
-} ESP_ZB_PACKED_STRUCT zbstring_t;
-
-static float zb_s16_to_temperature(int16_t value)
-{
-    return 1.0 * value / 100;
-}
-
-static void bdb_start_top_level_commissioning_cb(uint8_t mode_mask)
-{
-    LOG_ERROR("BDB top level commisioning cb");
-    ESP_RETURN_ON_FALSE(
-        esp_zb_bdb_start_top_level_commissioning(mode_mask) == ESP_OK,
-        ,
-        TAG,
-        "Failed to start Zigbee bdb commissioning");
-}
+// typedef struct zbstring_s
+// {
+//     uint8_t len;
+//     char    data[];
+// } ESP_ZB_PACKED_STRUCT zbstring_t;
 
 MillZigbee* pInstance = nullptr;
 
@@ -115,38 +102,39 @@ esp_err_t MillZigbee::zigbeeActionHandler(esp_zb_core_action_callback_id_t callb
     esp_err_t result = ESP_OK;
     switch (callbackId)
     {
-        case ESP_ZB_CORE_REPORT_ATTR_CB_ID:
-            LOG_ERROR("Attrubyte report handler");
-            result = attributeReportingHandler((esp_zb_zcl_report_attr_message_t*)message);
-            break;
-        case ESP_ZB_CORE_CMD_READ_ATTR_RESP_CB_ID:
-            LOG_ERROR("Read attr response");
-            result = readAttributeResponeHandler((esp_zb_zcl_cmd_read_attr_resp_message_t*)message);
-            break;
-        case ESP_ZB_CORE_CMD_REPORT_CONFIG_RESP_CB_ID:
-            LOG_ERROR("Configure report respons handler");
-            result = configureReportResponseHandler((esp_zb_zcl_cmd_config_report_resp_message_t*)message);
-            break;
         case ESP_ZB_CORE_THERMOSTAT_VALUE_CB_ID:
+        {
             LOG_ERROR("Theremo cb");
             result = thermostatClusterMessageHandler((esp_zb_zcl_thermostat_value_message_t*)message);
             break;
+        }
         case ESP_ZB_CORE_THERMOSTAT_WEEKLY_SCHEDULE_SET_CB_ID:
+        {
             result = thermostatWeeklyProgramSetCluster((esp_zb_zcl_thermostat_weekly_schedule_set_message_t*)message);
             LOG_ERROR("Theremo WEEKLY");
             break;
-
+        }
         case ESP_ZB_CORE_CMD_THERMOSTAT_GET_WEEKLY_SCHEDULE_RESP_CB_ID:
+        {
             LOG_ERROR("Theremo get WEEKLY");
             break;
-
+        }
         case ESP_ZB_CORE_SET_ATTR_VALUE_CB_ID:
+        {
             result = setAttrbibuteCallback((esp_zb_zcl_set_attr_value_message_t*)message);
             LOG_ERROR("SET ATTRIBUTE");
-
-        default:
-            LOG_ERROR("Unkown callback received %d", callbackId);
             break;
+        }
+        case ESP_ZB_CORE_BASIC_RESET_TO_FACTORY_RESET_CB_ID:
+        {
+            handleFactoryReset();
+            break;
+        }
+        default:
+        {
+            LOG_ERROR("Unkown action received %d", callbackId);
+            break;
+        }
     }
     LOG_ERROR("Return value = %d", result);
     return result;
@@ -182,12 +170,15 @@ void MillZigbee::zigbeeSignalsLoop(esp_zb_app_signal_t* pZigbeeSignal)
             esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
         }
         case ESP_ZB_BDB_SIGNAL_STEERING:
+        {
             if (err_status == ESP_OK)
             {
                 ESP_LOGI(TAG, "Network steering started");
             }
             break;
+        }
         case ESP_ZB_ZDO_SIGNAL_DEVICE_ANNCE:
+        {
             LOG_ERROR("Device connected");
             LOG_ERROR("Device signal device annce");
             dev_annce_params = (esp_zb_zdo_signal_device_annce_params_t*)esp_zb_app_signal_get_params(p_sg_p);
@@ -196,6 +187,7 @@ void MillZigbee::zigbeeSignalsLoop(esp_zb_app_signal_t* pZigbeeSignal)
             cmd_req.dst_nwk_addr     = dev_annce_params->device_short_addr;
             cmd_req.addr_of_interest = dev_annce_params->device_short_addr;
             break;
+        }
         case ESP_ZB_NWK_SIGNAL_PERMIT_JOIN_STATUS:
             LOG_ERROR("NWK permit join status");
             if (err_status == ESP_OK)
@@ -219,6 +211,7 @@ void MillZigbee::zigbeeSignalsLoop(esp_zb_app_signal_t* pZigbeeSignal)
             LOG_ERROR("Network lost, device should reconnect autmatically");
         }
         default:
+            LOG_ERROR("Unkown signal %d", sig_type);
             ESP_LOGI(
                 TAG,
                 "ZDO signal: %s (0x%x), status: %s",
@@ -257,6 +250,18 @@ bool MillZigbee::startCommisioning()
     return true;
 }
 
+void MillZigbee::setCallbcks(
+    FNewSetpointReceivedCallback   newSetpointCallback,
+    FNewSystemModeReceivedCallback newSystemModeCallback,
+    FFactoryResetRequestCallbck    factoryResetCallback,
+    FCommisioningCompleted         commisioningCompletedCallback)
+{
+    m_newSetpointReceivedCallback          = newSetpointCallback;
+    m_newSystemModeReceivedCallback        = newSystemModeCallback;
+    m_factoryResetRequestedRevicedCallback = factoryResetCallback;
+    m_commisioningCompletedCallback        = commisioningCompletedCallback;
+}
+
 void MillZigbee::perform(void* params)
 {
     auto* millZigbeeInstance = static_cast<MillZigbee*>(params);
@@ -280,6 +285,7 @@ void MillZigbee::performZigbee()
     thermostatConfig.thermostat_cfg.occupied_heating_setpoint     = m_setTemperature * ZIGBEE_TEMPERATURE_MULTIPLIER;
     thermostatConfig.thermostat_cfg.local_temperature             = m_localTemperature * ZIGBEE_TEMPERATURE_MULTIPLIER;
     thermostatConfig.thermostat_cfg.system_mode                   = static_cast<uint8_t>(m_systemMode);
+    thermostatConfig.thermostat_cfg.occupied_cooling_setpoint     = OCUPIED_COOLING_SETPOINT;
 
     esp_zb_ep_list_t* pThermostatEndpoint = createThermostatEndpoint(HA_THERMOSTAT_ENDPOINT, &thermostatConfig);
     /* Register the device */
@@ -342,6 +348,12 @@ void MillZigbee::setSystemMode(ESystemMode systemMode)
     LOG_ERROR("sTATUS  set system mode %d", status);
 }
 
+void MillZigbee::reset()
+{
+    LOG_WARNING("About to factory reset the device");
+    esp_zb_factory_reset();
+}
+
 void MillZigbee::init(float localTemperature, float setTemperature, ESystemMode systemMode)
 {
     esp_zb_radio_config_t radioConfig       = {};
@@ -360,27 +372,6 @@ void MillZigbee::init(float localTemperature, float setTemperature, ESystemMode 
     m_localTemperature = localTemperature;
     m_setTemperature   = setTemperature;
     m_systemMode       = systemMode;
-}
-
-esp_err_t MillZigbee::attributeReportingHandler(const esp_zb_zcl_report_attr_message_t* message)
-{
-    LOG_ERROR("Reporting Handler");
-    ESP_RETURN_ON_FALSE(message, ESP_FAIL, TAG, "Empty message");
-    ESP_RETURN_ON_FALSE(
-        message->status == ESP_ZB_ZCL_STATUS_SUCCESS,
-        ESP_ERR_INVALID_ARG,
-        TAG,
-        "Received message: error status(%d)",
-        message->status);
-    ESP_LOGI(
-        TAG,
-        "Received report from address(0x%x) src endpoint(%d) to dst endpoint(%d) cluster(0x%x)",
-        message->src_address.u.short_addr,
-        message->src_endpoint,
-        message->dst_endpoint,
-        message->cluster);
-    appAttributeHandler(message->cluster, &message->attribute);
-    return ESP_OK;
 }
 
 esp_err_t MillZigbee::setAttrbibuteCallback(const esp_zb_zcl_set_attr_value_message_t* pMessage)
@@ -407,60 +398,15 @@ esp_err_t MillZigbee::setAttrbibuteCallback(const esp_zb_zcl_set_attr_value_mess
     return ESP_OK;
 }
 
-esp_err_t MillZigbee::appAttributeHandler(uint16_t cluster_id, const esp_zb_zcl_attribute_t* attribute)
-{
-    LOG_ERROR("ATTR handler");
-    /* Basic cluster attributes */
-    if (cluster_id == ESP_ZB_ZCL_CLUSTER_ID_BASIC)
-    {
-        if (attribute->id == ESP_ZB_ZCL_ATTR_BASIC_MANUFACTURER_NAME_ID &&
-            attribute->data.type == ESP_ZB_ZCL_ATTR_TYPE_CHAR_STRING && attribute->data.value)
-        {
-            LOG_ERROR("Received manufacturer name");
-            zbstring_t* zbstr  = (zbstring_t*)attribute->data.value;
-            char*       string = (char*)malloc(zbstr->len + 1);
-            memcpy(string, zbstr->data, zbstr->len);
-            string[zbstr->len] = '\0';
-            ESP_LOGI(TAG, "Peer Manufacturer is \"%s\"", string);
-            free(string);
-        }
-        if (attribute->id == ESP_ZB_ZCL_ATTR_BASIC_MODEL_IDENTIFIER_ID &&
-            attribute->data.type == ESP_ZB_ZCL_ATTR_TYPE_CHAR_STRING && attribute->data.value)
-        {
-            LOG_ERROR("Received manufacturer name");
-            zbstring_t* zbstr  = (zbstring_t*)attribute->data.value;
-            char*       string = (char*)malloc(zbstr->len + 1);
-            memcpy(string, zbstr->data, zbstr->len);
-            string[zbstr->len] = '\0';
-            ESP_LOGI(TAG, "Peer Model is \"%s\"", string);
-            free(string);
-        }
-    }
-
-    return ESP_OK;
-}
-
-esp_err_t MillZigbee::readAttributeResponeHandler(const esp_zb_zcl_cmd_read_attr_resp_message_t* message)
-{
-    LOG_ERROR("Received attribute response handler");
-    return ESP_OK;
-}
-
-esp_err_t MillZigbee::configureReportResponseHandler(const esp_zb_zcl_cmd_config_report_resp_message_t* message)
-{
-    LOG_ERROR("Received configure report handler");
-    return ESP_OK;
-}
-
 esp_err_t MillZigbee::thermostatClusterMessageHandler(const esp_zb_zcl_thermostat_value_message_t* message)
 {
     LOG_ERROR("Message received %d %d", message->heat_setpoint, message->mode);
-    if (message->mode != SET_SETPOINT_HEAT_ONLY || message->mode == SET_SETPOINT_BOTH)
+    if (message->mode == SET_SETPOINT_HEAT_ONLY || message->mode == SET_SETPOINT_BOTH)
     {
         LOG_ERROR("Received valid temperature for independent device");
         m_setTemperature     = message->heat_setpoint;
         float setTemperature = m_setTemperature / ZIGBEE_TEMPERATURE_MULTIPLIER;
-        // TODO CALLBACK
+        m_newSetpointReceivedCallback(setTemperature);
         return ESP_OK;
     }
     return ESP_FAIL;
@@ -479,17 +425,24 @@ MillZigbee::thermostatWeeklyProgramSetCluster(const esp_zb_zcl_thermostat_weekly
     return ESP_OK;
 }
 
-esp_zb_ep_list_t* MillZigbee::createThermostatEndpoint(uint8_t endpoint_id, esp_zb_thermostat_cfg_t* thermostat)
+void MillZigbee::handleFactoryReset()
+{
+    LOG_INFO("Received factory reset");
+    m_factoryResetRequestedRevicedCallback();
+}
+
+esp_zb_ep_list_t* MillZigbee::createThermostatEndpoint(uint8_t endpointId, esp_zb_thermostat_cfg_t* thermostatConfig)
 {
     esp_zb_ep_list_t* endpointList = esp_zb_ep_list_create();
 
-    esp_zb_endpoint_config_t endpoint_config = {
-        .endpoint           = endpoint_id,
+    esp_zb_endpoint_config_t endpointConfiguration = {
+        .endpoint           = endpointId,
         .app_profile_id     = ESP_ZB_AF_HA_PROFILE_ID,
         .app_device_id      = ESP_ZB_HA_THERMOSTAT_DEVICE_ID,
         .app_device_version = 0};
-    auto* pClusterList = createThermostatCluster(thermostat);
-    esp_zb_ep_list_add_ep(endpointList, pClusterList, endpoint_config);
+    thermostatConfig->basic_cfg.power_source = POWER_SOURCE_CONFIGURATION;
+    auto* pClusterList                       = createThermostatCluster(thermostatConfig);
+    esp_zb_ep_list_add_ep(endpointList, pClusterList, endpointConfiguration);
     return endpointList;
 }
 
@@ -572,6 +525,6 @@ void MillZigbee::handleNewSystemMode(uint8_t systemMode)
     }
 
     m_systemMode = static_cast<ESystemMode>(systemMode);
-    // TODO callback here
+    m_newSystemModeReceivedCallback(m_systemMode);
     return;
 }

@@ -25,12 +25,19 @@ typedef struct tskTaskControlBlock* TaskHandle_t;
 
 
 #include "esp_zigbee_core.h"
+#include <functional>
 
 enum class ESystemMode : int8_t
 {
     HEATING = 4,
     OFF     = 0
 };
+
+
+typedef std::function<void(float setTemperature)>   FNewSetpointReceivedCallback;
+typedef std::function<void(ESystemMode systemMode)> FNewSystemModeReceivedCallback;
+typedef std::function<void()>                       FFactoryResetRequestCallbck;
+typedef std::function<void()>                       FCommisioningCompleted;
 
 
 class MillZigbee
@@ -48,6 +55,12 @@ public:
     bool isConfigured() const;
     bool startCommisioning();
 
+    void setCallbcks(
+        FNewSetpointReceivedCallback   newSetpointCallback,
+        FNewSystemModeReceivedCallback newSystemModeCallback,
+        FFactoryResetRequestCallbck    factoryResetCallback,
+        FCommisioningCompleted         commisioningCompletedCallback);
+
 #if !TESTING
     static void perform(void* params);
     void        performZigbee();
@@ -58,6 +71,7 @@ public:
     void setLocalTemperature(float localTemperature);
     void setSetTemperature(float setTemperature);
     void setSystemMode(ESystemMode systemMode);
+    void reset();
 
 private:
 #if !TESTING
@@ -68,24 +82,27 @@ private:
     uint16_t    m_setTemperature   = 0;
     ESystemMode m_systemMode       = ESystemMode::OFF;
     bool        m_started          = false;
-    esp_err_t   attributeReportingHandler(const esp_zb_zcl_report_attr_message_t* message);
+
+    FNewSetpointReceivedCallback   m_newSetpointReceivedCallback          = {};
+    FNewSystemModeReceivedCallback m_newSystemModeReceivedCallback        = {};
+    FFactoryResetRequestCallbck    m_factoryResetRequestedRevicedCallback = {};
+    FCommisioningCompleted         m_commisioningCompletedCallback        = {};
+
+    esp_err_t attributeReportingHandler(const esp_zb_zcl_report_attr_message_t* message);
 
     esp_err_t setAttrbibuteCallback(const esp_zb_zcl_set_attr_value_message_t* pMessage);
     esp_err_t appAttributeHandler(uint16_t cluster_id, const esp_zb_zcl_attribute_t* attribute);
 
-    esp_err_t readAttributeResponeHandler(const esp_zb_zcl_cmd_read_attr_resp_message_t* message);
-    esp_err_t configureReportResponseHandler(const esp_zb_zcl_cmd_config_report_resp_message_t* message);
     esp_err_t thermostatClusterMessageHandler(const esp_zb_zcl_thermostat_value_message_t* message);
     esp_err_t thermostatWeeklyProgramSetCluster(const esp_zb_zcl_thermostat_weekly_schedule_set_message_t* message);
 
-    esp_zb_ep_list_t*      createThermostatEndpoint(uint8_t endpoint_id, esp_zb_thermostat_cfg_t* thermostat);
+    void handleFactoryReset();
+
+    esp_zb_ep_list_t*      createThermostatEndpoint(uint8_t endpointId, esp_zb_thermostat_cfg_t* thermostatConfig);
     esp_zb_cluster_list_t* createThermostatCluster(esp_zb_thermostat_cfg_t* thermostat);
 
     void setSuquenceOfOperation();
     void handleNewSystemMode(uint8_t systemMode);
 };
-
-void esp_zb_task(void* pvParameters);
-void commisionTask(void* pvParameters);
 
 #endif // ZIGBEE_EXAMPLE_H

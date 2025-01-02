@@ -17,6 +17,29 @@ extern "C"
     }
 }
 
+void configuartionFinished()
+{
+    LOG_ERROR("Configuration finished");
+}
+
+void factoryResetReceived()
+{
+    LOG_ERROR("Factory reset");
+    auto* instance = MillZigbee::getInstance();
+    instance->reset();
+}
+
+void newSystemMode(ESystemMode mode)
+{
+    LOG_ERROR("New system mode = %d", static_cast<uint8_t>(mode));
+}
+
+void newSetTemperature(float setTemperature)
+{
+    LOG_ERROR("New set temperature = %f", setTemperature);
+}
+
+
 void run(void)
 {
     LOG_INFO("Hello from main!");
@@ -27,6 +50,7 @@ void run(void)
     instance->init(20.4, 13.5, ESystemMode::HEATING);
     instance->startZigbee();
     SLEEP_MS(3000);
+    instance->setCallbcks(newSetTemperature, newSystemMode, factoryResetReceived, configuartionFinished);
     instance->startCommisioning();
     float temperature = 20;
     while (1)
