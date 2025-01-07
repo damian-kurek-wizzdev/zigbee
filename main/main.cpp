@@ -6,7 +6,7 @@ static const char* LOG_TAG = "Main";
 #include "nvs_flash.h"
 #include "sleep.h"
 
-#include "zigbee_example.h"
+#include "mill_zigbee.h"
 
 void run(void);
 extern "C"
@@ -17,9 +17,18 @@ extern "C"
     }
 }
 
-void configuartionFinished()
+using namespace mill_zigbee;
+
+void configuartionFinished(bool success)
 {
-    LOG_ERROR("Configuration finished");
+    if (success)
+    {
+        LOG_ERROR("Configuration finished success");
+    }
+    else
+    {
+        LOG_ERROR("Configuration finished failed");
+    }
 }
 
 void factoryResetReceived()

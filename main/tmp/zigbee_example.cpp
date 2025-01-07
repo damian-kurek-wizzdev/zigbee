@@ -82,6 +82,7 @@ MillZigbee* MillZigbee::getInstance()
     {
         pInstance = new MillZigbee();
     }
+
     return pInstance;
 }
 
@@ -439,7 +440,7 @@ esp_zb_ep_list_t* MillZigbee::createThermostatEndpoint(uint8_t endpointId, esp_z
         .endpoint           = endpointId,
         .app_profile_id     = ESP_ZB_AF_HA_PROFILE_ID,
         .app_device_id      = ESP_ZB_HA_THERMOSTAT_DEVICE_ID,
-        .app_device_version = 0};
+        .app_device_version = 1};
     thermostatConfig->basic_cfg.power_source = POWER_SOURCE_CONFIGURATION;
     auto* pClusterList                       = createThermostatCluster(thermostatConfig);
     esp_zb_ep_list_add_ep(endpointList, pClusterList, endpointConfiguration);
@@ -460,6 +461,7 @@ esp_zb_cluster_list_t* MillZigbee::createThermostatCluster(esp_zb_thermostat_cfg
         pClusterList, esp_zb_identify_cluster_create(&(thermostat->identify_cfg)), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
     esp_zb_cluster_list_add_identify_cluster(
         pClusterList, esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_IDENTIFY), ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
+
     auto* pThermostatCluster = esp_zb_thermostat_cluster_create(&(thermostat->thermostat_cfg));
     esp_zb_cluster_list_add_thermostat_cluster(pClusterList, pThermostatCluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
     int16_t heatingMinTemperature = HEATING_MIN * ZIGBEE_TEMPERATURE_MULTIPLIER;

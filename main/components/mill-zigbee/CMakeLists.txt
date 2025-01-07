@@ -1,23 +1,17 @@
 cmake_minimum_required(VERSION 3.10)
 
 
-set (SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/)
-
+include(/data/zig-bee/main/components/mill-zigbee/component_sources.cmake)#//${COMPONENT_DIR}/component_sources.cmake)
 
 set (ALL_SOURCES
-    ${SRC_DIR}/main.cpp
-    # ${SRC_DIR}/common/defines.h
-    # ${SRC_DIR}/common/sleep.h
-    # ${SRC_DIR}/common/utils.c
-    # ${SRC_DIR}/common/utils.h
-    # ${SRC_DIR}/common/error_codes.c
-    # ${SRC_DIR}/common/error_codes.h
+    ${NON_TESTABLE_SOURCES}
+    ${TESTABLE_SOURCES}
     )
 
 
 set (ALL_INCLUDE_DIRS
-    ${SRC_DIR}/
-    ${SRC_DIR}/common/
+    ${TESTABLE_INCLUDE_DIRS}
+    ${NON_TESTABLE_INCLUDE_DIRS}
     )
 
 
@@ -25,7 +19,8 @@ set(COMPONENT_REQUIRES
     nvs_flash
     log
     freertos
-    mill-zigbee
+    esp-zboss-lib
+    esp-zigbee-lib
     wizzdev-common
     )
 
@@ -33,7 +28,7 @@ set(COMPONENT_PRIV_REQUIRES)
 
 set(COMPONENT_SRCS ${ALL_SOURCES})
 set(COMPONENT_ADD_INCLUDEDIRS ${ALL_INCLUDE_DIRS})
-set (EXTRA_COMPONENT_DIRS ${SRC_DIR}/components/)
+
 
 register_component()
 
