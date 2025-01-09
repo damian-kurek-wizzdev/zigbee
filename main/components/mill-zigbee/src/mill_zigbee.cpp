@@ -1,20 +1,7 @@
-/*
- * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: CC0-1.0
- *
- * Zigbee customized client Example
- *
- * This example code is in the Public Domain (or CC0 licensed, at your option.)
- *
- * Unless required by applicable law or agreed to in writing, this
- * software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
- * CONDITIONS OF ANY KIND, either express or implied.
- */
-
-
 static const char* LOG_TAG = "Zigbee_mill";
 #define LOG_AL_LEVEL ESP_LOG_INFO
+
+#include "mill_zigbee.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -23,14 +10,14 @@ static const char* LOG_TAG = "Zigbee_mill";
 #include "esp_zigbee_attribute.h"
 #include "esp_zigbee_core.h"
 #include "ha/esp_zigbee_ha_standard.h"
-#include "mill_zigbee.h"
+
 #include <cstdint>
 
 /* Zigbee configuration */
-bool     INSTALLCODE_POLICY_ENABLE = false; /* enable the install code policy for security */
-uint8_t  ED_AGING_TIMEOUT          = ESP_ZB_ED_AGING_TIMEOUT_64MIN;
-uint32_t ED_KEEP_ALIVE             = 3000; /* 3000 millisecond */
-uint8_t  HA_THERMOSTAT_ENDPOINT    = 1;    /* esp thermostat device endpoint */
+constexpr bool     INSTALLCODE_POLICY_ENABLE = false; /* enable the install code policy for security */
+constexpr uint8_t  ED_AGING_TIMEOUT          = ESP_ZB_ED_AGING_TIMEOUT_64MIN;
+constexpr uint32_t ED_KEEP_ALIVE             = 3000; /* 3000 millisecond */
+constexpr uint8_t  HA_THERMOSTAT_ENDPOINT    = 1;    /* esp thermostat device endpoint */
 
 /* Basic manufacturer information */
 constexpr const char* MANUFACTURER_NAME = "\x04"
@@ -38,14 +25,11 @@ constexpr const char* MANUFACTURER_NAME = "\x04"
 constexpr const char* MODEL_IDENTIFIER = "\x10"
                                          "Panel gen4"; /* Customized model identifier */
 
-constexpr const char*    TAG                           = "ESP_HA_ON_OFF_SWITCH";
 constexpr const uint8_t  OPERATION_MODE_HEATING_ONLY   = 2;
 constexpr const uint8_t  SYSTEM_MODE_HEATING           = 4;
 constexpr const uint8_t  SYSTEM_MODE_OFF               = 0;
 constexpr const uint16_t ZIGBEE_TEMPERATURE_MULTIPLIER = 100; // We need to multiply value by 100 when
 constexpr const uint32_t ZIGBEE_USE_ALL_CHANNELS       = 0x07FFF800;
-int                      DEVICE_CLASS                  = 0x02;
-int                      DEVICE_TYPE                   = 0x10;
 constexpr const float    HEATING_MAX                   = 35.0f;
 constexpr const float    HEATING_MIN                   = 5.0f;
 constexpr const uint16_t OCUPIED_COOLING_SETPOINT      = 3600;
@@ -93,29 +77,30 @@ esp_err_t MillZigbee::zigbeeActionHandler(esp_zb_core_action_callback_id_t callb
     {
         case ESP_ZB_CORE_THERMOSTAT_VALUE_CB_ID:
         {
-            LOG_ERROR("Theremo cb");
+            LOG_INFO("Thermostat callback received");
             result = thermostatClusterMessageHandler((esp_zb_zcl_thermostat_value_message_t*)message);
             break;
         }
         case ESP_ZB_CORE_THERMOSTAT_WEEKLY_SCHEDULE_SET_CB_ID:
         {
             result = thermostatWeeklyProgramSetCluster((esp_zb_zcl_thermostat_weekly_schedule_set_message_t*)message);
-            LOG_ERROR("Theremo WEEKLY");
+            LOG_ERROR("Thermostat weekly program callback received");
             break;
         }
         case ESP_ZB_CORE_CMD_THERMOSTAT_GET_WEEKLY_SCHEDULE_RESP_CB_ID:
         {
-            LOG_ERROR("Theremo get WEEKLY");
+            LOG_INFO("Thermostat get weekly program received");
             break;
         }
         case ESP_ZB_CORE_SET_ATTR_VALUE_CB_ID:
         {
+            LOG_INFO("Set attribute callback received");
             result = setAttrbibuteCallback((esp_zb_zcl_set_attr_value_message_t*)message);
-            LOG_ERROR("SET ATTRIBUTE");
             break;
         }
         case ESP_ZB_CORE_BASIC_RESET_TO_FACTORY_RESET_CB_ID:
         {
+            LOG_INFO("Factory reset received");
             handleFactoryReset();
             break;
         }
@@ -125,7 +110,6 @@ esp_err_t MillZigbee::zigbeeActionHandler(esp_zb_core_action_callback_id_t callb
             break;
         }
     }
-    LOG_ERROR("Return value = %d", result);
     return result;
 }
 
@@ -137,24 +121,24 @@ void MillZigbee::zigbeeSignalsLoop(esp_zb_app_signal_t* pZigbeeSignal)
     switch (signalType)
     {
         case ESP_ZB_ZDO_SIGNAL_SKIP_STARTUP:
-            LOG_ERROR("ZDO skip startup");
+            LOG_INFO("ZDO skip startup");
             esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_INITIALIZATION);
             break;
         case ESP_ZB_BDB_SIGNAL_DEVICE_FIRST_START:
         case ESP_ZB_BDB_SIGNAL_DEVICE_REBOOT:
         {
-            LOG_ERROR("Reboot/First start, zigbee ready");
+            LOG_INFO("Reboot/First start, zigbee ready");
             m_started = true;
             if (isConfigured())
             {
-                LOG_ERROR("Start existing network");
+                LOG_INFO("Start existing network");
                 esp_zb_bdb_open_network(180);
             }
             break;
         }
         case ESP_ZB_BDB_SIGNAL_FORMATION:
         {
-            LOG_ERROR("Network formed we can start commisioning");
+            LOG_INFO("Network formed we can start commisioning");
             esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
             break;
         }
@@ -163,11 +147,11 @@ void MillZigbee::zigbeeSignalsLoop(esp_zb_app_signal_t* pZigbeeSignal)
             bool success = errorStatus == ESP_OK;
             if (success)
             {
-                LOG_ERROR("Networking steering started");
+                LOG_INFO("Networking steering started");
             }
             else
             {
-                LOG_ERROR("Networking stering FAILED");
+                LOG_INFO("Networking stering FAILED");
             }
             m_commisioningCompletedCallback(success);
 
@@ -175,42 +159,21 @@ void MillZigbee::zigbeeSignalsLoop(esp_zb_app_signal_t* pZigbeeSignal)
         }
         case ESP_ZB_ZDO_SIGNAL_DEVICE_ANNCE:
         {
-            LOG_ERROR("Device connected");
+            LOG_INFO("Device connected");
             break;
         }
         case ESP_ZB_NWK_SIGNAL_PERMIT_JOIN_STATUS:
         {
-            LOG_ERROR("NWK permit join status");
-            if (errorStatus == ESP_OK)
-            {
-                if (*(uint8_t*)esp_zb_app_signal_get_params(pAppSignal))
-                {
-                    ESP_LOGI(
-                        TAG,
-                        "Network(0x%04hx) is open for %d seconds",
-                        esp_zb_get_pan_id(),
-                        *(uint8_t*)esp_zb_app_signal_get_params(pAppSignal));
-                }
-                else
-                {
-                    ESP_LOGW(TAG, "Network(0x%04hx) closed, devices joining not allowed.", esp_zb_get_pan_id());
-                }
-            }
+            LOG_INFO("NWK permit join status");
             break;
         }
         case ESP_ZB_NLME_STATUS_INDICATION:
         {
-            LOG_ERROR("Network lost, device should reconnect autmatically");
+            LOG_INFO("Network lost, device should reconnect autmatically");
             break;
         }
         default:
-            LOG_ERROR("Unkown signal %d", signalType);
-            ESP_LOGI(
-                TAG,
-                "ZDO signal: %s (0x%x), status: %s",
-                esp_zb_zdo_signal_to_string(signalType),
-                signalType,
-                esp_err_to_name(errorStatus));
+            LOG_INFO("Unkown signal %d", signalType);
             break;
     }
 }
@@ -282,14 +245,12 @@ void MillZigbee::performZigbee()
 
     esp_zb_ep_list_t* pThermostatEndpoint = createThermostatEndpoint(HA_THERMOSTAT_ENDPOINT, &thermostatConfig);
     /* Register the device */
-    auto result = esp_zb_device_register(pThermostatEndpoint);
-    LOG_ERROR("Register %d", result);
+    esp_zb_device_register(pThermostatEndpoint);
     esp_zb_core_action_handler_register(zigbeeActionHandlerStatic);
-    result = esp_zb_set_primary_network_channel_set(ZIGBEE_USE_ALL_CHANNELS);
-    LOG_ERROR("Channel %d", result);
+    esp_zb_set_primary_network_channel_set(ZIGBEE_USE_ALL_CHANNELS);
     esp_zb_start(false);
     esp_zb_secur_network_min_join_lqi_set(1);
-    while (true)
+    while (m_running)
     {
         esp_zb_stack_main_loop_iteration();
     }
@@ -345,6 +306,11 @@ void MillZigbee::reset()
 {
     LOG_WARNING("About to factory reset the device");
     esp_zb_factory_reset();
+}
+
+void MillZigbee::stopZigbee()
+{
+    m_running = false;
 }
 
 void MillZigbee::init(float localTemperature, float setTemperature, ESystemMode systemMode)
@@ -408,13 +374,7 @@ esp_err_t MillZigbee::thermostatClusterMessageHandler(const esp_zb_zcl_thermosta
 esp_err_t
 MillZigbee::thermostatWeeklyProgramSetCluster(const esp_zb_zcl_thermostat_weekly_schedule_set_message_t* message)
 {
-    LOG_ERROR(
-        "Message received %d %d %d %lu",
-        message->day_of_week,
-        message->mode_for_req,
-        message->trans.transition_time,
-        message->trans_status);
-
+    LOG_INFO("Set weekly program callback");
     return ESP_OK;
 }
 

@@ -1,19 +1,18 @@
 cmake_minimum_required(VERSION 3.10)
 
 
-include(/data/zig-bee/main/components/mill-zigbee/component_sources.cmake)#//${COMPONENT_DIR}/component_sources.cmake)
+include(${COMPONENT_DIR}/component_sources.cmake)#//component_sources.cmake)
 
 set (ALL_SOURCES
-    ${NON_TESTABLE_SOURCES}
-    ${TESTABLE_SOURCES}
+    ${MODULE_TESTABLE_SOURCES}
+    ${MODULE_NON_TESTABLE_SOURCES}
     )
 
 
 set (ALL_INCLUDE_DIRS
-    ${TESTABLE_INCLUDE_DIRS}
-    ${NON_TESTABLE_INCLUDE_DIRS}
+    ${MODULE_TESTABLE_INCLUDE_DIRS}
+    ${MODULE_NON_TESTABLE_INCLUDE_DIRS}
     )
-
 
 set(COMPONENT_REQUIRES 
     nvs_flash
@@ -25,7 +24,6 @@ set(COMPONENT_REQUIRES
     )
 
 set(COMPONENT_PRIV_REQUIRES)
-
 set(COMPONENT_SRCS ${ALL_SOURCES})
 set(COMPONENT_ADD_INCLUDEDIRS ${ALL_INCLUDE_DIRS})
 

@@ -3,19 +3,17 @@ cmake_minimum_required(VERSION 3.10)
 
 set (SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
+include(${COMPONENT_DIR}/component_sources.cmake)
 
 set (ALL_SOURCES
-    ${SRC_DIR}/defines.h
-    ${SRC_DIR}/sleep.h
-    ${SRC_DIR}/utils.c
-    ${SRC_DIR}/utils.h
-    ${SRC_DIR}/error_codes.c
-    ${SRC_DIR}/error_codes.h
+    ${MODULE_TESTABLE_SOURCES}
+    ${MODULE_NON_TESTABLE_SOURCES}
     )
 
 
 set (ALL_INCLUDE_DIRS
-    ${SRC_DIR}/
+    ${MODULE_TESTABLE_INCLUDE_DIRS}
+    ${MODULE_NON_TESTABLE_INCLUDE_DIRS}
     )
 
 
@@ -38,5 +36,4 @@ register_component()
 #endif()
 
 
-#target_compile_options(${COMPONENT_TARGET} PRIVATE -std=gnu99)  // already set by idf.py
-target_compile_options(${COMPONENT_TARGET} PRIVATE -Wall)
+#target_compile_options(${COMPONENT_TARGET} PRIVATE -Wall)

@@ -6,12 +6,6 @@ set (SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/)
 
 set (ALL_SOURCES
     ${SRC_DIR}/main.cpp
-    # ${SRC_DIR}/common/defines.h
-    # ${SRC_DIR}/common/sleep.h
-    # ${SRC_DIR}/common/utils.c
-    # ${SRC_DIR}/common/utils.h
-    # ${SRC_DIR}/common/error_codes.c
-    # ${SRC_DIR}/common/error_codes.h
     )
 
 
@@ -29,11 +23,12 @@ set(COMPONENT_REQUIRES
     wizzdev-common
     )
 
+
 set(COMPONENT_PRIV_REQUIRES)
 
 set(COMPONENT_SRCS ${ALL_SOURCES})
 set(COMPONENT_ADD_INCLUDEDIRS ${ALL_INCLUDE_DIRS})
-set (EXTRA_COMPONENT_DIRS ${SRC_DIR}/components/)
+set(EXTRA_COMPONENT_DIRS ${SRC_DIR}/components/)
 
 register_component()
 

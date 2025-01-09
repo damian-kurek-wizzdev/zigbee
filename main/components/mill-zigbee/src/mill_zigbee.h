@@ -12,8 +12,8 @@
  * CONDITIONS OF ANY KIND, either express or implied.
  */
 
-#ifndef ZIGBEE_EXAMPLE_H
-#define ZIGBEE_EXAMPLE_H
+#ifndef MILL_ZIGBEE_H
+#define MILL_ZIGBEE_H
 
 #include <cstdint>
 #if !TESTING
@@ -25,6 +25,7 @@ typedef struct tskTaskControlBlock* TaskHandle_t;
 
 
 #include "esp_zigbee_core.h"
+#include <atomic>
 #include <functional>
 
 
@@ -77,17 +78,18 @@ public:
     void setSetTemperature(float setTemperature);
     void setSystemMode(ESystemMode systemMode);
     void reset();
+    void stopZigbee();
 
 private:
 #if !TESTING
     TaskHandle_t m_taskHandle = nullptr;
 #endif // !TESTING
 
-    int16_t     m_localTemperature = 0;
-    uint16_t    m_setTemperature   = 0;
-    ESystemMode m_systemMode       = ESystemMode::OFF;
-    bool        m_started          = false;
-
+    int16_t                        m_localTemperature                     = 0;
+    uint16_t                       m_setTemperature                       = 0;
+    ESystemMode                    m_systemMode                           = ESystemMode::OFF;
+    bool                           m_started                              = false;
+    std::atomic_bool               m_running                              = true;
     FNewSetpointReceivedCallback   m_newSetpointReceivedCallback          = {};
     FNewSystemModeReceivedCallback m_newSystemModeReceivedCallback        = {};
     FFactoryResetRequestCallbck    m_factoryResetRequestedRevicedCallback = {};
@@ -113,4 +115,4 @@ private:
 } // namespace mill_zigbee
 
 
-#endif // ZIGBEE_EXAMPLE_H
+#endif // MILL_ZIGBEE_H
