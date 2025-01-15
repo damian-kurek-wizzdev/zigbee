@@ -8,6 +8,9 @@ static const char* LOG_TAG = "Main";
 
 #include "mill_zigbee.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
 void run(void);
 extern "C"
 {
@@ -49,11 +52,50 @@ void newSetTemperature(float setTemperature)
 }
 
 
+TaskHandle_t task1 = nullptr;
+TaskHandle_t task2 = nullptr;
+TaskHandle_t task3 = nullptr;
+
+void loggingTask1(void* pArgs)
+{
+    while (true)
+    {
+        int minRemaningBytes = uxTaskGetStackHighWaterMark2(task1);
+        LOG_ERROR("Minimal remaning number of bytes on stack task1 %d", minRemaningBytes);
+        SLEEP_MS(1000);
+    }
+}
+
+
+void loggingTask2(void* pArgs)
+{
+    while (true)
+    {
+        int minRemaningBytes = uxTaskGetStackHighWaterMark2(task2);
+        LOG_ERROR("Minimal remaning number of bytes on stack task2 %d", minRemaningBytes);
+        SLEEP_MS(1000);
+    }
+}
+
+
+void loggingTask3(void* pArgs)
+{
+    while (true)
+    {
+        int minRemaningBytes = uxTaskGetStackHighWaterMark2(task3);
+        LOG_ERROR("Minimal remaning number of bytes on stack task3 %d", minRemaningBytes);
+        SLEEP_MS(1000);
+    }
+}
+
+
 void run(void)
 {
-    LOG_INFO("Hello from main!");
+    xTaskCreate(loggingTask1, "Task1", 4096, nullptr, 5, &task1);
+    xTaskCreate(loggingTask2, "Task2", 4096, nullptr, 5, &task2);
+    xTaskCreate(loggingTask3, "Task3", 4096, nullptr, 5, &task3);
 
-
+    SLEEP_MS(20000);
     ESP_ERROR_CHECK(nvs_flash_init());
     auto instance = MillZigbee::getInstance();
     instance->init(20.4, 13.5, ESystemMode::HEATING);
