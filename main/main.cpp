@@ -61,7 +61,7 @@ void loggingTask1(void* pArgs)
     while (true)
     {
         int minRemaningBytes = uxTaskGetStackHighWaterMark2(task1);
-        LOG_ERROR("Minimal remaning number of bytes on stack task1 %d", minRemaningBytes);
+        ESP_LOGE("Task1", "Minimal remaning number of bytes on stack task3 %d", minRemaningBytes);
         SLEEP_MS(1000);
     }
 }
@@ -72,7 +72,7 @@ void loggingTask2(void* pArgs)
     while (true)
     {
         int minRemaningBytes = uxTaskGetStackHighWaterMark2(task2);
-        LOG_ERROR("Minimal remaning number of bytes on stack task2 %d", minRemaningBytes);
+        ESP_LOGE("Task2", "Minimal remaning number of bytes on stack task3 %d", minRemaningBytes);
         SLEEP_MS(1000);
     }
 }
@@ -83,7 +83,7 @@ void loggingTask3(void* pArgs)
     while (true)
     {
         int minRemaningBytes = uxTaskGetStackHighWaterMark2(task3);
-        LOG_ERROR("Minimal remaning number of bytes on stack task3 %d", minRemaningBytes);
+        ESP_LOGE("Task3", "Minimal remaning number of bytes on stack task3 %d", minRemaningBytes);
         SLEEP_MS(1000);
     }
 }
